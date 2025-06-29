@@ -13,6 +13,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.banquito.formalizacion.controller.dto.PagareDTO;
+import com.banquito.formalizacion.controller.mapper.PagareMapper;
 import com.banquito.formalizacion.enums.PagareEstado;
 import com.banquito.formalizacion.exception.InvalidStateException;
 import com.banquito.formalizacion.exception.NotFoundException;
@@ -27,145 +29,208 @@ public class PagareService {
     private static final Logger logger = LoggerFactory.getLogger(PagareService.class);
 
     private final PagareRepository repository;
+    private final PagareMapper mapper;
 
-    public PagareService(PagareRepository repository) {
+    public PagareService(PagareRepository repository, PagareMapper mapper) {
         this.repository = repository;
+        this.mapper = mapper;
     }
 
     @Transactional(readOnly = true)
-    public Page<Pagare> findAll(Pageable pageable) {
-        logger.debug("Consultando pagarés con paginación: página {}, tamaño {}", 
-                    pageable.getPageNumber(), pageable.getPageSize());
-        return repository.findAll(pageable);
+    public Page<PagareDTO> findAll(Pageable pageable) {
+        try {
+            logger.debug("Consultando pagarés con paginación: página {}, tamaño {}", 
+                        pageable.getPageNumber(), pageable.getPageSize());
+            Page<Pagare> pagares = repository.findAll(pageable);
+            return pagares.map(mapper::toDTO);
+        } catch (Exception e) {
+            logger.error("Error al consultar pagarés con paginación", e);
+            throw new RuntimeException("Error al consultar pagarés");
+        }
     }
 
     @Transactional(readOnly = true)
-    public List<Pagare> findAll() {
-        logger.debug("Consultando todos los pagarés - USAR CON PRECAUCIÓN");
-        return repository.findAll();
+    public PagareDTO findById(Integer id) {
+        try {
+            logger.debug("Consultando pagaré por ID: {}", id);
+            Pagare pagare = repository.findById(id)
+                    .orElseThrow(() -> new NotFoundException(id.toString(), "Pagare"));
+            return mapper.toDTO(pagare);
+        } catch (NotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            logger.error("Error al consultar pagaré por ID: {}", id, e);
+            throw new RuntimeException("Error al consultar pagaré");
+        }
     }
 
     @Transactional(readOnly = true)
-    public Pagare findById(Integer id) {
-        logger.debug("Consultando pagaré por ID: {}", id);
-        return repository.findById(id)
-                .orElseThrow(() -> new NotFoundException(id.toString(), "Pagare"));
+    public List<PagareDTO> findByContratoCredito(Integer idContratoCredito) {
+        try {
+            logger.debug("Consultando pagarés por contrato de crédito: {}", idContratoCredito);
+            List<Pagare> pagares = repository.findByIdContratoCreditoOrderByNumeroCuota(idContratoCredito);
+            return pagares.stream().map(mapper::toDTO).toList();
+        } catch (Exception e) {
+            logger.error("Error al consultar pagarés por contrato: {}", idContratoCredito, e);
+            throw new RuntimeException("Error al consultar pagarés por contrato");
+        }
     }
 
     @Transactional(readOnly = true)
-    public List<Pagare> findByContratoCredito(Integer idContratoCredito) {
-        logger.debug("Consultando pagarés por contrato de crédito: {}", idContratoCredito);
-        return repository.findByIdContratoCreditoOrderByNumeroCuota(idContratoCredito);
+    public Page<PagareDTO> findByEstado(PagareEstado estado, Pageable pageable) {
+        try {
+            logger.debug("Consultando pagarés por estado: {} con paginación", estado);
+            Page<Pagare> pagares = repository.findByEstado(estado, pageable);
+            return pagares.map(mapper::toDTO);
+        } catch (Exception e) {
+            logger.error("Error al consultar pagarés por estado: {}", estado, e);
+            throw new RuntimeException("Error al consultar pagarés por estado");
+        }
     }
 
     @Transactional(readOnly = true)
-    public List<Pagare> findByEstado(PagareEstado estado) {
-        logger.debug("Consultando pagarés por estado: {}", estado);
-        return repository.findByEstado(estado);
+    public Page<PagareDTO> findByContratoCredito(Integer idContratoCredito, Pageable pageable) {
+        try {
+            logger.debug("Consultando pagarés por contrato de crédito: {} con paginación", idContratoCredito);
+            Page<Pagare> pagares = repository.findByIdContratoCreditoOrderByNumeroCuota(idContratoCredito, pageable);
+            return pagares.map(mapper::toDTO);
+        } catch (Exception e) {
+            logger.error("Error al consultar pagarés por contrato con paginación: {}", idContratoCredito, e);
+            throw new RuntimeException("Error al consultar pagarés por contrato");
+        }
     }
 
     @Transactional(readOnly = true)
-    public Page<Pagare> findByEstado(PagareEstado estado, Pageable pageable) {
-        logger.debug("Consultando pagarés por estado: {} con paginación", estado);
-        return repository.findByEstado(estado, pageable);
+    public List<PagareDTO> findPagaresVencidos() {
+        try {
+            LocalDate fechaActual = LocalDate.now();
+            List<Pagare> pagares = repository.findByFechaVencimientoBeforeAndEstado(fechaActual, PagareEstado.PENDIENTE);
+            return pagares.stream().map(mapper::toDTO).toList();
+        } catch (Exception e) {
+            logger.error("Error al consultar pagarés vencidos", e);
+            throw new RuntimeException("Error al consultar pagarés vencidos");
+        }
     }
 
     @Transactional(readOnly = true)
-    public Page<Pagare> findByContratoCredito(Integer idContratoCredito, Pageable pageable) {
-        logger.debug("Consultando pagarés por contrato de crédito: {} con paginación", idContratoCredito);
-        return repository.findByIdContratoCreditoOrderByNumeroCuota(idContratoCredito, pageable);
+    public List<PagareDTO> findPagaresPorVencer(int diasAntes) {
+        try {
+            LocalDate fechaInicio = LocalDate.now();
+            LocalDate fechaFin = fechaInicio.plusDays(diasAntes);
+            List<Pagare> pagares = repository.findByFechaVencimientoBetween(fechaInicio, fechaFin);
+            return pagares.stream().map(mapper::toDTO).toList();
+        } catch (Exception e) {
+            logger.error("Error al consultar pagarés por vencer", e);
+            throw new RuntimeException("Error al consultar pagarés por vencer");
+        }
     }
 
-    @Transactional(readOnly = true)
-    public List<Pagare> findPagaresVencidos() {
-        LocalDate fechaActual = LocalDate.now();
-        return repository.findByFechaVencimientoBeforeAndEstado(fechaActual, PagareEstado.PENDIENTE);
-    }
-
-    @Transactional(readOnly = true)
-    public List<Pagare> findPagaresPorVencer(int diasAntes) {
-        LocalDate fechaInicio = LocalDate.now();
-        LocalDate fechaFin = fechaInicio.plusDays(diasAntes);
-        return repository.findByFechaVencimientoBetween(fechaInicio, fechaFin);
-    }
-
-    public List<Pagare> generarPagares(ContratoCredito contrato) {
-        logger.info("Generando pagarés para contrato de crédito ID: {}", contrato.getIdContratoCredito());
-        
-        List<Pagare> pagares = new ArrayList<>();
-        BigDecimal montoCuota = calcularCuotaMensual(
-            contrato.getMontoAprobado(), 
-            contrato.getTasaEfectivaAnual(), 
-            contrato.getPlazoFinalMeses()
-        );
-
-        LocalDate fechaBase = contrato.getFechaGeneracion().toLocalDate().plusMonths(1);
-        
-        for (int i = 1; i <= contrato.getPlazoFinalMeses(); i++) {
-            Pagare pagare = new Pagare();
-            pagare.setIdContratoCredito(contrato.getIdContratoCredito());
-            pagare.setNumeroCuota(i);
-            pagare.setMontoCuota(montoCuota);
-            pagare.setFechaVencimiento(ajustarADiaLaborable(fechaBase.plusMonths(i - 1)));
-            pagare.setEstado(PagareEstado.PENDIENTE);
-            pagare.setVersion(1L);
+    public List<PagareDTO> generarPagares(ContratoCredito contrato) {
+        try {
+            logger.info("Generando pagarés para contrato de crédito ID: {}", contrato.getIdContratoCredito());
             
-            pagares.add(pagare);
-        }
-
-        List<Pagare> pagaresGuardados = repository.saveAll(pagares);
-        logger.info("Se generaron {} pagarés para el contrato ID: {}", 
-                   pagaresGuardados.size(), contrato.getIdContratoCredito());
-        
-        return pagaresGuardados;
-    }
-
-    public Pagare registrarPago(Integer idPagare) {
-        logger.info("Registrando pago de pagaré ID: {}", idPagare);
-        
-        Pagare pagare = findById(idPagare);
-        
-        if (pagare.getEstado() != PagareEstado.PENDIENTE) {
-            throw new InvalidStateException(
-                pagare.getEstado().toString(), 
-                PagareEstado.PAGADO.toString(), 
-                "Pagare"
+            List<Pagare> pagares = new ArrayList<>();
+            BigDecimal montoCuota = calcularCuotaMensual(
+                contrato.getMontoAprobado(), 
+                contrato.getTasaEfectivaAnual(), 
+                contrato.getPlazoFinalMeses()
             );
+
+            LocalDate fechaBase = contrato.getFechaGeneracion().toLocalDate().plusMonths(1);
+            
+            for (int i = 1; i <= contrato.getPlazoFinalMeses(); i++) {
+                Pagare pagare = new Pagare();
+                pagare.setIdContratoCredito(contrato.getIdContratoCredito());
+                pagare.setNumeroCuota(i);
+                pagare.setMontoCuota(montoCuota);
+                pagare.setFechaVencimiento(ajustarADiaLaborable(fechaBase.plusMonths(i - 1)));
+                pagare.setEstado(PagareEstado.PENDIENTE);
+                pagare.setVersion(1L);
+                
+                pagares.add(pagare);
+            }
+
+            List<Pagare> pagaresGuardados = repository.saveAll(pagares);
+            logger.info("Se generaron {} pagarés para el contrato ID: {}", 
+                       pagaresGuardados.size(), contrato.getIdContratoCredito());
+            
+            return pagaresGuardados.stream().map(mapper::toDTO).toList();
+        } catch (Exception e) {
+            logger.error("Error al generar pagarés para contrato: {}", contrato.getIdContratoCredito(), e);
+            throw new RuntimeException("Error al generar pagarés");
         }
-
-        pagare.setEstado(PagareEstado.PAGADO);
-        pagare.setVersion(pagare.getVersion() + 1);
-
-        Pagare pagareActualizado = repository.save(pagare);
-        logger.info("Pago registrado exitosamente para pagaré ID: {}", idPagare);
-        
-        return pagareActualizado;
     }
 
-    public List<Pagare> marcarComoVencidos() {
-        logger.info("Marcando pagarés vencidos");
-        
-        List<Pagare> pagaresVencidos = findPagaresVencidos();
-        
-        for (Pagare pagare : pagaresVencidos) {
-            pagare.setEstado(PagareEstado.VENCIDO);
-            pagare.setVersion(pagare.getVersion() + 1);
-        }
+    public PagareDTO registrarPago(Integer idPagare) {
+        try {
+            logger.info("Registrando pago de pagaré ID: {}", idPagare);
+            
+            Pagare pagare = repository.findById(idPagare)
+                    .orElseThrow(() -> new NotFoundException(idPagare.toString(), "Pagare"));
+            
+            if (pagare.getEstado() != PagareEstado.PENDIENTE) {
+                throw new InvalidStateException(
+                    pagare.getEstado().toString(), 
+                    PagareEstado.PAGADO.toString(), 
+                    "Pagare"
+                );
+            }
 
-        List<Pagare> pagaresActualizados = repository.saveAll(pagaresVencidos);
-        logger.info("Se marcaron {} pagarés como vencidos", pagaresActualizados.size());
-        
-        return pagaresActualizados;
+            pagare.setEstado(PagareEstado.PAGADO);
+            pagare.setVersion(pagare.getVersion() + 1);
+
+            Pagare pagareActualizado = repository.save(pagare);
+            logger.info("Pago registrado exitosamente para pagaré ID: {}", idPagare);
+            
+            return mapper.toDTO(pagareActualizado);
+        } catch (NotFoundException | InvalidStateException e) {
+            throw e;
+        } catch (Exception e) {
+            logger.error("Error al registrar pago de pagaré ID: {}", idPagare, e);
+            throw new RuntimeException("Error al registrar pago de pagaré");
+        }
+    }
+
+    public List<PagareDTO> marcarComoVencidos() {
+        try {
+            logger.info("Marcando pagarés vencidos");
+            
+            LocalDate fechaActual = LocalDate.now();
+            List<Pagare> pagaresVencidos = repository.findByFechaVencimientoBeforeAndEstado(fechaActual, PagareEstado.PENDIENTE);
+            
+            for (Pagare pagare : pagaresVencidos) {
+                pagare.setEstado(PagareEstado.VENCIDO);
+                pagare.setVersion(pagare.getVersion() + 1);
+            }
+
+            List<Pagare> pagaresActualizados = repository.saveAll(pagaresVencidos);
+            logger.info("Se marcaron {} pagarés como vencidos", pagaresActualizados.size());
+            
+            return pagaresActualizados.stream().map(mapper::toDTO).toList();
+        } catch (Exception e) {
+            logger.error("Error al marcar pagarés como vencidos", e);
+            throw new RuntimeException("Error al marcar pagarés como vencidos");
+        }
     }
 
     @Transactional(readOnly = true)
     public long contarPagaresPendientesPorContrato(Integer idContratoCredito) {
-        return repository.countByIdContratoCreditoAndEstado(idContratoCredito, PagareEstado.PENDIENTE);
+        try {
+            return repository.countByIdContratoCreditoAndEstado(idContratoCredito, PagareEstado.PENDIENTE);
+        } catch (Exception e) {
+            logger.error("Error al contar pagarés pendientes por contrato: {}", idContratoCredito, e);
+            throw new RuntimeException("Error al contar pagarés pendientes");
+        }
     }
 
     @Transactional(readOnly = true)
     public long contarPagaresVencidosPorContrato(Integer idContratoCredito) {
-        return repository.countByIdContratoCreditoAndEstado(idContratoCredito, PagareEstado.VENCIDO);
+        try {
+            return repository.countByIdContratoCreditoAndEstado(idContratoCredito, PagareEstado.VENCIDO);
+        } catch (Exception e) {
+            logger.error("Error al contar pagarés vencidos por contrato: {}", idContratoCredito, e);
+            throw new RuntimeException("Error al contar pagarés vencidos");
+        }
     }
 
     private BigDecimal calcularCuotaMensual(BigDecimal monto, BigDecimal tasaAnual, Integer plazoMeses) {
