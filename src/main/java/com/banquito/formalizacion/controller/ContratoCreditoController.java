@@ -1,256 +1,148 @@
 package com.banquito.formalizacion.controller;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
-
+import com.banquito.formalizacion.controller.dto.ContratoCreditoCreateDTO;
 import com.banquito.formalizacion.controller.dto.ContratoCreditoDTO;
-import com.banquito.formalizacion.controller.dto.PageResponseDTO;
+import com.banquito.formalizacion.controller.dto.ContratoCreditoUpdateDTO;
 import com.banquito.formalizacion.enums.ContratoCreditoEstado;
-import com.banquito.formalizacion.exception.ContratoNoFirmadoException;
-import com.banquito.formalizacion.exception.ContratoYaExisteException;
-import com.banquito.formalizacion.exception.InvalidStateException;
-import com.banquito.formalizacion.exception.NotFoundException;
-import com.banquito.formalizacion.exception.NumeroContratoYaExisteException;
-import com.banquito.formalizacion.exception.PagaresPendientesException;
 import com.banquito.formalizacion.service.ContratoCreditoService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+
 import jakarta.validation.Valid;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
+
 @RestController
-@RequestMapping("/api/v1/contratos-credito")
+@RequestMapping(path = "/api/contratos-credito", produces = "application/json")
+@Tag(name = "Contratos de Crédito", description = "API para gestionar Contratos de Crédito Automotriz")
 @Validated
-@Tag(name = "Contratos de Crédito", description = "Gestión de contratos de crédito automotriz")
 public class ContratoCreditoController {
 
+    private static final Logger log = LoggerFactory.getLogger(ContratoCreditoController.class);
     private final ContratoCreditoService service;
 
     public ContratoCreditoController(ContratoCreditoService service) {
         this.service = service;
     }
 
-    @GetMapping
-    @Operation(summary = "Obtener contratos con paginación y filtros",
-               description = "Obtiene contratos de crédito con soporte para paginación, ordenamiento y filtros múltiples")
-    public ResponseEntity<PageResponseDTO<ContratoCreditoDTO>> getContratos(
-            @Parameter(description = "Número de página (inicia en 0)")
-            @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Tamaño de página")
-            @RequestParam(defaultValue = "20") int size,
-            @Parameter(description = "Campo de ordenamiento")
-            @RequestParam(defaultValue = "idContratoCredito") String sortBy,
-            @Parameter(description = "Dirección de ordenamiento")
-            @RequestParam(defaultValue = "asc") String sortDir,
-            @Parameter(description = "Filtro por estado")
-            @RequestParam(required = false) ContratoCreditoEstado estado,
-            @Parameter(description = "Filtro por número de contrato core (búsqueda parcial)")
-            @RequestParam(required = false) String numeroContratoCore,
-            @Parameter(description = "Filtro por ID de solicitud")
-            @RequestParam(required = false) Integer idSolicitud) {
-
-        Sort sort = sortDir.equalsIgnoreCase("desc")
-            ? Sort.by(sortBy).descending()
-            : Sort.by(sortBy).ascending();
-
-        Pageable pageable = PageRequest.of(page, size, sort);
-
-        Page<ContratoCreditoDTO> contratos = service.findContratosConFiltros(
-            estado, numeroContratoCore, idSolicitud, pageable);
-
-        PageResponseDTO<ContratoCreditoDTO> response = new PageResponseDTO<>(
-            contratos.getContent(),
-            contratos.getNumber(),
-            contratos.getSize(),
-            contratos.getTotalElements(),
-            contratos.getTotalPages()
-        );
-
-        return ResponseEntity.ok(response);
-    }
-
-    @GetMapping("/all")
-    @Operation(summary = "Obtener todos los contratos sin filtros - USAR CON PRECAUCIÓN",
-               description = "Endpoint legacy - usar con precaución en producción")
-    public ResponseEntity<PageResponseDTO<ContratoCreditoDTO>> getAllContratos(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size) {
-
-        Pageable pageable = PageRequest.of(page, size);
-        Page<ContratoCreditoDTO> contratos = service.findAll(pageable);
-
-        PageResponseDTO<ContratoCreditoDTO> response = new PageResponseDTO<>(
-            contratos.getContent(),
-            contratos.getNumber(),
-            contratos.getSize(),
-            contratos.getTotalElements(),
-            contratos.getTotalPages()
-        );
-
-        return ResponseEntity.ok(response);
-    }
-
+    @Operation(summary = "Obtiene un Contrato de Crédito por su ID")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Contrato encontrado",
+                     content = @Content(schema = @Schema(implementation = ContratoCreditoDTO.class))),
+        @ApiResponse(responseCode = "404", description = "Contrato no encontrado")
+    })
     @GetMapping("/{id}")
-    @Operation(summary = "Obtener contrato por ID")
-    public ResponseEntity<ContratoCreditoDTO> getContratoById(@PathVariable Integer id) {
-        ContratoCreditoDTO contrato = service.findById(id);
-        return ResponseEntity.ok(contrato);
+    public ResponseEntity<ContratoCreditoDTO> getById(
+        @Parameter(description = "ID del contrato", required = true)
+        @PathVariable Long id) {
+        log.debug("Solicitud recibida → Obtener ContratoCredito con ID={}", id);
+        ContratoCreditoDTO dto = service.getContratoCreditoById(id);
+        log.info("ContratoCredito ID={} recuperado correctamente.", id);
+        return ResponseEntity.ok(dto);
     }
 
-    @GetMapping("/solicitud/{idSolicitud}")
-    @Operation(summary = "Obtener contrato por ID de solicitud")
-    public ResponseEntity<ContratoCreditoDTO> getContratoBySolicitud(@PathVariable Integer idSolicitud) {
-        ContratoCreditoDTO contrato = service.findByIdSolicitud(idSolicitud);
-        return ResponseEntity.ok(contrato);
+    @Operation(summary = "Crea un nuevo Contrato de Crédito")
+    @ApiResponses({
+        @ApiResponse(responseCode = "201", description = "Contrato creado",
+                     content = @Content(schema = @Schema(implementation = ContratoCreditoDTO.class))),
+        @ApiResponse(responseCode = "400", description = "Datos inválidos o conflicto de contrato")
+    })
+    @PostMapping(consumes = "application/json")
+    public ResponseEntity<ContratoCreditoDTO> create(
+        @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "Payload para crear el Contrato de Crédito",
+            required = true,
+            content = @Content(schema = @Schema(implementation = ContratoCreditoCreateDTO.class))
+        )
+        @Valid @RequestBody ContratoCreditoCreateDTO createDto) {
+        log.debug("Solicitud recibida → Crear ContratoCredito para solicitud={}", createDto.getIdSolicitud());
+        ContratoCreditoDTO created = service.createContratoCredito(createDto);
+        log.info("ContratoCredito creado correctamente con ID={}", created.getIdContratoCredito());
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
-    @GetMapping("/numero-core/{numeroContratoCore}")
-    @Operation(summary = "Obtener contrato por número core")
-    public ResponseEntity<ContratoCreditoDTO> getContratoByNumeroCore(@PathVariable String numeroContratoCore) {
-        ContratoCreditoDTO contrato = service.findByNumeroContratoCore(numeroContratoCore);
-        return ResponseEntity.ok(contrato);
+    @Operation(summary = "Actualiza un Contrato de Crédito existente")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Contrato actualizado",
+                     content = @Content(schema = @Schema(implementation = ContratoCreditoDTO.class))),
+        @ApiResponse(responseCode = "400", description = "ID path/body no coinciden o datos inválidos"),
+        @ApiResponse(responseCode = "404", description = "Contrato no encontrado")
+    })
+    @PutMapping(path = "/{id}", consumes = "application/json")
+    public ResponseEntity<ContratoCreditoDTO> update(
+        @Parameter(description = "ID del contrato a actualizar", required = true)
+        @PathVariable Long id,
+        @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "Payload para actualizar el Contrato de Crédito",
+            required = true,
+            content = @Content(schema = @Schema(implementation = ContratoCreditoUpdateDTO.class))
+        )
+        @Valid @RequestBody ContratoCreditoUpdateDTO updateDto) {
+        log.debug("Solicitud recibida → Actualizar ContratoCredito ID={}", id);
+        ContratoCreditoDTO updated = service.updateContratoCredito(id, updateDto);
+        log.info("ContratoCredito ID={} actualizado correctamente.", id);
+        return ResponseEntity.ok(updated);
     }
 
-    @GetMapping("/estado/{estado}")
-    @Operation(summary = "Obtener contratos por estado con paginación")
-    public ResponseEntity<PageResponseDTO<ContratoCreditoDTO>> getContratosByEstado(
-            @PathVariable ContratoCreditoEstado estado,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "idContratoCredito") String sortBy,
-            @RequestParam(defaultValue = "asc") String sortDir) {
-
-        Sort sort = sortDir.equalsIgnoreCase("desc")
-            ? Sort.by(sortBy).descending()
-            : Sort.by(sortBy).ascending();
-
-        Pageable pageable = PageRequest.of(page, size, sort);
-        Page<ContratoCreditoDTO> contratos = service.findByEstado(estado, pageable);
-
-        PageResponseDTO<ContratoCreditoDTO> response = new PageResponseDTO<>(
-            contratos.getContent(),
-            contratos.getNumber(),
-            contratos.getSize(),
-            contratos.getTotalElements(),
-            contratos.getTotalPages()
-        );
-
-        return ResponseEntity.ok(response);
+    @Operation(summary = "Elimina lógicamente un Contrato de Crédito (marca como CANCELADO)")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Contrato cancelado"),
+        @ApiResponse(responseCode = "404", description = "Contrato no encontrado")
+    })
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ContratoCreditoDTO> logicalDelete(
+        @Parameter(description = "ID del contrato a eliminar", required = true)
+        @PathVariable Long id) {
+        log.debug("Solicitud recibida → Eliminación lógica de ContratoCredito ID={}", id);
+        ContratoCreditoDTO deleted = service.logicalDeleteContratoCredito(id);
+        log.warn("ContratoCredito ID={} marcado como CANCELADO.", id);
+        return ResponseEntity.ok(deleted);
     }
 
-    @GetMapping("/desembolso")
-    @Operation(summary = "Obtener contratos pendientes de desembolso")
-    public ResponseEntity<PageResponseDTO<ContratoCreditoDTO>> getContratosParaDesembolso(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+    @Operation(summary = "Lista contratos con filtros y paginación")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Listado de contratos")
+    })
+    @GetMapping
+    public ResponseEntity<Page<ContratoCreditoDTO>> listWithFilters(
+        @Parameter(description = "Estado del contrato") @RequestParam(required = false) ContratoCreditoEstado estado,
+        @Parameter(description = "Número de contrato core (búsqueda parcial)") @RequestParam(required = false) String numeroContratoCore,
+        @Parameter(description = "ID de solicitud") @RequestParam(required = false) Long idSolicitud,
+        @Parameter(description = "Página", example = "0") @RequestParam(defaultValue = "0") int page,
+        @Parameter(description = "Tamaño de página", example = "20") @RequestParam(defaultValue = "20") int size) {
 
         Pageable pageable = PageRequest.of(page, size);
-        Page<ContratoCreditoDTO> contratos = service.obtenerContratosParaDesembolso(pageable);
-
-        PageResponseDTO<ContratoCreditoDTO> response = new PageResponseDTO<>(
-            contratos.getContent(),
-            contratos.getNumber(),
-            contratos.getSize(),
-            contratos.getTotalElements(),
-            contratos.getTotalPages()
-        );
-
-        return ResponseEntity.ok(response);
+        Page<ContratoCreditoDTO> result = service.findContratosConFiltros(estado, numeroContratoCore, idSolicitud, pageable);
+        log.info("Consulta contratos: encontrados {} resultados.", result.getTotalElements());
+        return ResponseEntity.ok(result);
     }
 
-    @GetMapping("/activos")
-    @Operation(summary = "Obtener contratos activos")
-    public ResponseEntity<PageResponseDTO<ContratoCreditoDTO>> getContratosActivos(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-
-        Pageable pageable = PageRequest.of(page, size);
-        Page<ContratoCreditoDTO> contratos = service.obtenerContratosActivos(pageable);
-
-        PageResponseDTO<ContratoCreditoDTO> response = new PageResponseDTO<>(
-            contratos.getContent(),
-            contratos.getNumber(),
-            contratos.getSize(),
-            contratos.getTotalElements(),
-            contratos.getTotalPages()
-        );
-
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping
-    @Operation(summary = "Instrumentar nuevo crédito")
-    public ResponseEntity<ContratoCreditoDTO> instrumentarCredito(@Valid @RequestBody ContratoCreditoDTO contratoDto) {
-        ContratoCreditoDTO contratoGenerado = service.instrumentarCredito(contratoDto);
-        return ResponseEntity.status(HttpStatus.CREATED).body(contratoGenerado);
-    }
-
-    @PutMapping("/{id}/firmar")
-    @Operation(summary = "Registrar firma de contrato")
-    public ResponseEntity<ContratoCreditoDTO> firmarContrato(
-            @PathVariable Integer id,
-            @RequestParam String rutaArchivoFirmado) {
-        ContratoCreditoDTO contratoFirmado = service.registrarFirmaContrato(id, rutaArchivoFirmado);
-        return ResponseEntity.ok(contratoFirmado);
-    }
-
-    @PutMapping("/{id}/aprobar-desembolso")
-    @Operation(summary = "Aprobar desembolso del crédito")
-    public ResponseEntity<ContratoCreditoDTO> aprobarDesembolso(@PathVariable Integer id) {
-        ContratoCreditoDTO contratoAprobado = service.aprobarDesembolso(id);
-        return ResponseEntity.ok(contratoAprobado);
-    }
-
-    @PutMapping("/{id}/marcar-pagado")
-    @Operation(summary = "Marcar contrato como pagado")
-    public ResponseEntity<ContratoCreditoDTO> marcarComoPagado(@PathVariable Integer id) {
-        ContratoCreditoDTO contratoPagado = service.marcarComoPagado(id);
-        return ResponseEntity.ok(contratoPagado);
-    }
-
-    @PutMapping("/{id}/cancelar")
-    @Operation(summary = "Cancelar contrato de crédito")
-    public ResponseEntity<ContratoCreditoDTO> cancelarContrato(
-            @PathVariable Integer id,
-            @RequestParam String motivo) {
-        ContratoCreditoDTO contratoCancelado = service.cancelarContrato(id, motivo);
-        return ResponseEntity.ok(contratoCancelado);
-    }
-
-    @GetMapping("/existe-solicitud/{idSolicitud}")
-    @Operation(summary = "Verificar si existe contrato para solicitud")
-    public ResponseEntity<Boolean> existeContratoPorSolicitud(@PathVariable Integer idSolicitud) {
+    @Operation(summary = "Verifica si existe un contrato para una solicitud")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Indicador de existencia")
+    })
+    @GetMapping("/existe/solicitud/{idSolicitud}")
+    public ResponseEntity<Boolean> existsBySolicitud(
+        @Parameter(description = "ID de la solicitud", required = true)
+        @PathVariable Long idSolicitud) {
+        log.debug("Verificando existencia de contrato para solicitud {}", idSolicitud);
         boolean existe = service.existePorSolicitud(idSolicitud);
+        log.info("Existencia de contrato para solicitud {}: {}", idSolicitud, existe);
         return ResponseEntity.ok(existe);
     }
 
-    @ExceptionHandler({NotFoundException.class})
-    public ResponseEntity<String> manejarNoEncontrado(NotFoundException ex) {
-        return ResponseEntity.notFound().build();
-    }
-
-    @ExceptionHandler({ContratoYaExisteException.class, NumeroContratoYaExisteException.class})
-    public ResponseEntity<String> manejarErrorLogicaNegocio(RuntimeException ex) {
-        return ResponseEntity.badRequest().body(ex.getMessage());
-    }
-
-    @ExceptionHandler({InvalidStateException.class, ContratoNoFirmadoException.class, PagaresPendientesException.class})
-    public ResponseEntity<String> manejarEstadoInvalido(RuntimeException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(ex.getMessage());
-    }
-} 
+}

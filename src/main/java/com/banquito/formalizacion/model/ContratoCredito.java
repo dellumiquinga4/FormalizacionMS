@@ -16,6 +16,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -30,13 +31,13 @@ public class ContratoCredito {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id_contrato_credito", nullable = false)
-    private Integer idContratoCredito;
+    private Long idContratoCredito;
 
     @Column(name = "id_solicitud", nullable = false, unique = true)
-    private Integer idSolicitud;
+    private Long idSolicitud;
 
-    @Column(name = "numero_contrato_core", nullable = false, unique = true, length = 50)
-    private String numeroContratoCore;
+    @Column(name = "numero_contrato", nullable = false, unique = true, length = 50)
+    private String numeroContrato;
 
     @Column(name = "fecha_generacion", nullable = false)
     private LocalDateTime fechaGeneracion;
@@ -48,7 +49,7 @@ public class ContratoCredito {
     private BigDecimal montoAprobado;
 
     @Column(name = "plazo_final_meses", nullable = false)
-    private Integer plazoFinalMeses;
+    private Long plazoFinalMeses;
 
     @Column(name = "tasa_efectiva_anual", nullable = false, precision = 5, scale = 2)
     private BigDecimal tasaEfectivaAnual;
@@ -60,13 +61,13 @@ public class ContratoCredito {
     @Column(name = "estado", nullable = false)
     private ContratoCreditoEstado estado;
 
-    @Column(name = "version", nullable = false)
+    @Version
     private Long version;
 
     @OneToMany(mappedBy = "idContratoCredito")
     private List<Pagare> pagares;
 
-    public ContratoCredito(Integer idContratoCredito) {
+    public ContratoCredito(Long idContratoCredito) {
         this.idContratoCredito = idContratoCredito;
     }
 
@@ -88,7 +89,7 @@ public class ContratoCredito {
         return "ContratoCredito{" +
                 "idContratoCredito=" + idContratoCredito +
                 ", idSolicitud=" + idSolicitud +
-                ", numeroContratoCore='" + numeroContratoCore + '\'' +
+                ", numeroContrato='" + numeroContrato + '\'' +
                 ", fechaGeneracion=" + fechaGeneracion +
                 ", fechaFirma=" + fechaFirma +
                 ", montoAprobado=" + montoAprobado +
