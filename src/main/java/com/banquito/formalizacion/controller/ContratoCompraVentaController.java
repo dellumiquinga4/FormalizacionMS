@@ -52,7 +52,7 @@ public class ContratoCompraVentaController {
         @PathVariable Long id) {
 
         log.debug("Solicitud recibida → Obtener contrato con ID={}", id);
-        ContratoCompraVentaDTO dto = service.findById(id);
+        ContratoCompraVentaDTO dto = service.getContratoCompraVentaById(id);
         log.info("Contrato con ID={} recuperado correctamente", id);
         return ResponseEntity.ok(dto);
     }
@@ -69,7 +69,7 @@ public class ContratoCompraVentaController {
         @PathVariable ContratoVentaEstado estado) {
 
         log.debug("ENTER GET /api/contratos-compra-venta/estado/{} → listar contratos", estado);
-        List<ContratoCompraVentaDTO> dtos = service.listarContratosPorEstado(estado);
+        List<ContratoCompraVentaDTO> dtos = service.getContratosByEstado(estado);
         if (dtos.isEmpty()) {
             log.warn("No se encontraron contratos para el estado {}", estado);
             return ResponseEntity.notFound().build();
@@ -90,7 +90,7 @@ public class ContratoCompraVentaController {
         @Valid @RequestBody ContratoCompraVentaCreateDTO createDto) {
 
         log.debug("Solicitud recibida → Crear contrato de compra-venta para solicitud {}", createDto.getIdSolicitud());
-        ContratoCompraVentaDTO created = service.generarContratoVenta(createDto);
+        ContratoCompraVentaDTO created = service.createContratoCompraVenta(createDto);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
@@ -109,7 +109,7 @@ public class ContratoCompraVentaController {
         @Valid @RequestBody ContratoCompraVentaUpdateDTO updateDto) {
 
         log.debug("Solicitud recibida → Actualizar contrato ID={} con estado='{}'", id, updateDto.getEstado());
-        ContratoCompraVentaDTO updated = service.actualizarContrato(id, updateDto);
+        ContratoCompraVentaDTO updated = service.updateContratoCompraVenta(id, updateDto);
         return ResponseEntity.ok(updated);
     }
 
