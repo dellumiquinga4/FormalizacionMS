@@ -12,11 +12,11 @@ import com.banquito.formalizacion.enums.PagareEstado;
 import com.banquito.formalizacion.model.Pagare;
 
 @Repository
-public interface PagareRepository extends JpaRepository<Pagare, Integer> {
+public interface PagareRepository extends JpaRepository<Pagare, Long> {
 
-    List<Pagare> findByIdContratoCredito(Integer idContratoCredito);
+    List<Pagare> findByIdContratoCredito(Long idContratoCredito);
     
-    List<Pagare> findByIdContratoCreditoOrderByNumeroCuota(Integer idContratoCredito);
+    List<Pagare> findByIdContratoCreditoOrderByNumeroCuota(Long idContratoCredito);
     
     List<Pagare> findByEstado(PagareEstado estado);
     
@@ -24,13 +24,19 @@ public interface PagareRepository extends JpaRepository<Pagare, Integer> {
     
     List<Pagare> findByFechaVencimientoBeforeAndEstado(LocalDate fecha, PagareEstado estado);
     
-    long countByIdContratoCreditoAndEstado(Integer idContratoCredito, PagareEstado estado);
+    long countByIdContratoCreditoAndEstado(Long idContratoCredito, PagareEstado estado);
 
-    Page<Pagare> findByIdContratoCreditoOrderByNumeroCuota(Integer idContratoCredito, Pageable pageable);
+    Page<Pagare> findByIdContratoCreditoOrderByNumeroCuota(Long idContratoCredito, Pageable pageable);
     
     Page<Pagare> findByEstado(PagareEstado estado, Pageable pageable);
     
     Page<Pagare> findByFechaVencimientoBeforeAndEstado(LocalDate fecha, PagareEstado estado, Pageable pageable);
     
     Page<Pagare> findByFechaVencimientoBetween(LocalDate fechaInicio, LocalDate fechaFin, Pageable pageable);
-} 
+
+    void deleteByIdContratoCredito(Long idContratoCredito);
+
+    boolean existsByIdContratoCredito(Long idContratoCredito);
+
+    java.util.Optional<Pagare> findByIdContratoCreditoAndNumeroCuota(Long idContratoCredito, Long numeroCuota);
+}

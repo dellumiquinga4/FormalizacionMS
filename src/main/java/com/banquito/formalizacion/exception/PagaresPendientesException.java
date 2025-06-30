@@ -2,10 +2,10 @@ package com.banquito.formalizacion.exception;
 
 public class PagaresPendientesException extends RuntimeException {
 
-    private final Integer idContrato;
+    private final Long idContrato;
     private final long cantidadPendientes;
 
-    public PagaresPendientesException(Integer idContrato, long cantidadPendientes) {
+    public PagaresPendientesException(Long idContrato, long cantidadPendientes) {
         super();
         this.idContrato = idContrato;
         this.cantidadPendientes = cantidadPendientes;
@@ -17,7 +17,7 @@ public class PagaresPendientesException extends RuntimeException {
                            idContrato, cantidadPendientes);
     }
 
-    public Integer getIdContrato() {
+    public Long getIdContrato() {
         return idContrato;
     }
 

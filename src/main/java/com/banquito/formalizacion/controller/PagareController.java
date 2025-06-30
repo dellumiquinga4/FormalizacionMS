@@ -1,188 +1,110 @@
 package com.banquito.formalizacion.controller;
 
-import java.util.List;
-
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.http.ResponseEntity;
-import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
-
-import com.banquito.formalizacion.controller.dto.PageResponseDTO;
 import com.banquito.formalizacion.controller.dto.PagareDTO;
-import com.banquito.formalizacion.enums.PagareEstado;
-import com.banquito.formalizacion.exception.InvalidStateException;
-import com.banquito.formalizacion.exception.NotFoundException;
+import com.banquito.formalizacion.controller.dto.PagareCreateDTO;
+import com.banquito.formalizacion.controller.dto.PagareUpdateDTO;
 import com.banquito.formalizacion.service.PagareService;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.Parameter;
+
+import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/pagares")
-@Validated
-@Tag(name = "Pagarés", description = "Gestión de pagarés del cronograma de pagos")
+@RequestMapping("/api/pagares")
+@Tag(name = "Pagarés", description = "API para gestión del cronograma de pagarés")
+@Slf4j
 public class PagareController {
 
-    private final PagareService service;
+    private final PagareService pagareService;
 
-    public PagareController(PagareService service) {
-        this.service = service;
-    }
-
-    @GetMapping
-    @Operation(summary = "Obtener pagarés con paginación",
-               description = "Obtiene pagarés con soporte para paginación y ordenamiento")
-    public ResponseEntity<PageResponseDTO<PagareDTO>> getPagares(
-            @Parameter(description = "Número de página (inicia en 0)")
-            @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Tamaño de página")
-            @RequestParam(defaultValue = "20") int size,
-            @Parameter(description = "Campo de ordenamiento")
-            @RequestParam(defaultValue = "fechaVencimiento") String sortBy,
-            @Parameter(description = "Dirección de ordenamiento")
-            @RequestParam(defaultValue = "asc") String sortDir) {
-
-        Sort sort = sortDir.equalsIgnoreCase("desc")
-            ? Sort.by(sortBy).descending()
-            : Sort.by(sortBy).ascending();
-
-        Pageable pageable = PageRequest.of(page, size, sort);
-        Page<PagareDTO> pagares = service.findAll(pageable);
-
-        PageResponseDTO<PagareDTO> response = new PageResponseDTO<>(
-            pagares.getContent(),
-            pagares.getNumber(),
-            pagares.getSize(),
-            pagares.getTotalElements(),
-            pagares.getTotalPages()
-        );
-
-        return ResponseEntity.ok(response);
+    public PagareController(PagareService pagareService) {
+        this.pagareService = pagareService;
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Obtener pagaré por ID")
-    public ResponseEntity<PagareDTO> getPagareById(@PathVariable Integer id) {
-        PagareDTO pagare = service.findById(id);
+    @Operation(summary = "Obtener pagaré por ID", description = "Obtiene un pagaré específico por su ID")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Pagaré encontrado",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = PagareDTO.class))),
+        @ApiResponse(responseCode = "404", description = "Pagaré no encontrado")
+    })
+    public ResponseEntity<PagareDTO> getPagareById(@PathVariable Long id) {
+        log.info("Solicitando pagaré por ID: {}", id);
+        PagareDTO pagare = pagareService.getPagareById(id);
         return ResponseEntity.ok(pagare);
     }
 
     @GetMapping("/contrato/{idContratoCredito}")
-    @Operation(summary = "Obtener pagarés por contrato de crédito")
-    public ResponseEntity<List<PagareDTO>> getPagaresByContrato(@PathVariable Integer idContratoCredito) {
-        List<PagareDTO> pagares = service.findByContratoCredito(idContratoCredito);
+    @Operation(summary = "Obtener todos los pagarés de un contrato", description = "Obtiene la lista ordenada de pagarés de un contrato de crédito")
+    public ResponseEntity<List<PagareDTO>> getPagaresByContrato(
+            @PathVariable Long idContratoCredito) {
+        log.info("Listando pagarés de contrato de crédito ID: {}", idContratoCredito);
+        List<PagareDTO> pagares = pagareService.getPagaresByContratoCredito(idContratoCredito);
         return ResponseEntity.ok(pagares);
     }
 
-    @GetMapping("/contrato/{idContratoCredito}/paginated")
-    @Operation(summary = "Obtener pagarés por contrato con paginación")
-    public ResponseEntity<PageResponseDTO<PagareDTO>> getPagaresByContratoPaginated(
-            @PathVariable Integer idContratoCredito,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-
-        Pageable pageable = PageRequest.of(page, size);
-        Page<PagareDTO> pagares = service.findByContratoCredito(idContratoCredito, pageable);
-
-        PageResponseDTO<PagareDTO> response = new PageResponseDTO<>(
-            pagares.getContent(),
-            pagares.getNumber(),
-            pagares.getSize(),
-            pagares.getTotalElements(),
-            pagares.getTotalPages()
-        );
-
-        return ResponseEntity.ok(response);
+    @GetMapping("/contrato/{idContratoCredito}/cuota/{numeroCuota}")
+    @Operation(summary = "Obtener un pagaré de un contrato por número de cuota", description = "Obtiene el pagaré de un contrato para una cuota específica")
+    public ResponseEntity<PagareDTO> getPagareByContratoAndCuota(
+            @PathVariable Long idContratoCredito,
+            @PathVariable Long numeroCuota) {
+        log.info("Buscando pagaré por contrato {} y cuota {}", idContratoCredito, numeroCuota);
+        PagareDTO pagare = pagareService.getPagareByContratoAndCuota(idContratoCredito, numeroCuota);
+        return ResponseEntity.ok(pagare);
     }
 
-    @GetMapping("/estado/{estado}")
-    @Operation(summary = "Obtener pagarés por estado con paginación")
-    public ResponseEntity<PageResponseDTO<PagareDTO>> getPagaresByEstado(
-            @PathVariable PagareEstado estado,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "fechaVencimiento") String sortBy,
-            @RequestParam(defaultValue = "asc") String sortDir) {
-
-        Sort sort = sortDir.equalsIgnoreCase("desc")
-            ? Sort.by(sortBy).descending()
-            : Sort.by(sortBy).ascending();
-
-        Pageable pageable = PageRequest.of(page, size, sort);
-        Page<PagareDTO> pagares = service.findByEstado(estado, pageable);
-
-        PageResponseDTO<PagareDTO> response = new PageResponseDTO<>(
-            pagares.getContent(),
-            pagares.getNumber(),
-            pagares.getSize(),
-            pagares.getTotalElements(),
-            pagares.getTotalPages()
-        );
-
-        return ResponseEntity.ok(response);
+    @PostMapping
+    @Operation(summary = "Crear un nuevo pagaré manual", description = "Permite crear un pagaré de forma manual (casos excepcionales)")
+    public ResponseEntity<PagareDTO> createPagare(@Valid @RequestBody PagareCreateDTO dto) {
+        log.info("Creando pagaré manual para contrato {}", dto.getIdContratoCredito());
+        PagareDTO pagare = pagareService.createPagare(dto);
+        return ResponseEntity.status(HttpStatus.CREATED).body(pagare);
     }
 
-    @GetMapping("/vencidos")
-    @Operation(summary = "Obtener pagarés vencidos")
-    public ResponseEntity<List<PagareDTO>> getPagaresVencidos() {
-        List<PagareDTO> pagares = service.findPagaresVencidos();
-        return ResponseEntity.ok(pagares);
+    @PutMapping("/{id}")
+    @Operation(summary = "Actualizar pagaré", description = "Actualiza los datos de un pagaré existente")
+    public ResponseEntity<PagareDTO> updatePagare(
+            @PathVariable Long id,
+            @Valid @RequestBody PagareUpdateDTO dto) {
+        log.info("Actualizando pagaré ID: {}", id);
+        PagareDTO pagareActualizado = pagareService.updatePagare(id, dto);
+        return ResponseEntity.ok(pagareActualizado);
     }
 
-    @GetMapping("/por-vencer")
-    @Operation(summary = "Obtener pagarés próximos a vencer")
-    public ResponseEntity<List<PagareDTO>> getPagaresPorVencer(
-            @Parameter(description = "Días de anticipación")
-            @RequestParam(defaultValue = "30") int diasAntes) {
-        List<PagareDTO> pagares = service.findPagaresPorVencer(diasAntes);
-        return ResponseEntity.ok(pagares);
+    @PostMapping("/generar")
+    @Operation(summary = "Generar cronograma completo de pagarés", description = "Genera N pagarés automáticos para un contrato, uno por cada mes")
+    public ResponseEntity<List<PagareDTO>> generarPagares(
+            @Parameter(description = "ID del contrato de crédito") @RequestParam Long idContratoCredito,
+            @Parameter(description = "Monto solicitado") @RequestParam BigDecimal montoSolicitado,
+            @Parameter(description = "Tasa anual (%)") @RequestParam BigDecimal tasaAnual,
+            @Parameter(description = "Plazo en meses") @RequestParam int plazoMeses,
+            @Parameter(description = "Fecha inicial") @RequestParam LocalDate fechaInicio) {
+        log.info("Generando {} pagarés para contrato {} (monto={}, tasa={}, inicio={})",
+                plazoMeses, idContratoCredito, montoSolicitado, tasaAnual, fechaInicio);
+        List<PagareDTO> pagares = pagareService.generarPagaresDesdeParams(
+                idContratoCredito, montoSolicitado, tasaAnual, plazoMeses, fechaInicio);
+        return ResponseEntity.status(HttpStatus.CREATED).body(pagares);
     }
 
-    @PutMapping("/{id}/registrar-pago")
-    @Operation(summary = "Registrar pago de pagaré")
-    public ResponseEntity<PagareDTO> registrarPago(@PathVariable Integer id) {
-        PagareDTO pagarePagado = service.registrarPago(id);
-        return ResponseEntity.ok(pagarePagado);
+    @GetMapping("/contrato/{idContratoCredito}/existen")
+    @Operation(summary = "Verificar si existen pagarés para un contrato")
+    public ResponseEntity<Boolean> existenPagaresPorContrato(@PathVariable Long idContratoCredito) {
+        log.info("Verificando existencia de pagarés para contrato {}", idContratoCredito);
+        boolean existen = pagareService.existenPagaresPorContrato(idContratoCredito);
+        return ResponseEntity.ok(existen);
     }
-
-    @PutMapping("/marcar-vencidos")
-    @Operation(summary = "Marcar pagarés como vencidos")
-    public ResponseEntity<List<PagareDTO>> marcarComoVencidos() {
-        List<PagareDTO> pagaresVencidos = service.marcarComoVencidos();
-        return ResponseEntity.ok(pagaresVencidos);
-    }
-
-    @GetMapping("/contrato/{idContratoCredito}/pendientes/count")
-    @Operation(summary = "Contar pagarés pendientes por contrato")
-    public ResponseEntity<Long> contarPagaresPendientes(@PathVariable Integer idContratoCredito) {
-        long count = service.contarPagaresPendientesPorContrato(idContratoCredito);
-        return ResponseEntity.ok(count);
-    }
-
-    @GetMapping("/contrato/{idContratoCredito}/vencidos/count")
-    @Operation(summary = "Contar pagarés vencidos por contrato")
-    public ResponseEntity<Long> contarPagaresVencidos(@PathVariable Integer idContratoCredito) {
-        long count = service.contarPagaresVencidosPorContrato(idContratoCredito);
-        return ResponseEntity.ok(count);
-    }
-
-    @ExceptionHandler({NotFoundException.class})
-    public ResponseEntity<String> manejarNoEncontrado(NotFoundException ex) {
-        return ResponseEntity.notFound().build();
-    }
-
-    @ExceptionHandler({InvalidStateException.class})
-    public ResponseEntity<String> manejarEstadoInvalido(InvalidStateException ex) {
-        return ResponseEntity.status(409).body(ex.getMessage());
-    }
-} 
+}

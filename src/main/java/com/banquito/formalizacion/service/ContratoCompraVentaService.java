@@ -3,8 +3,6 @@ package com.banquito.formalizacion.service;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +11,7 @@ import com.banquito.formalizacion.controller.dto.ContratoCompraVentaCreateDTO;
 import com.banquito.formalizacion.controller.dto.ContratoCompraVentaUpdateDTO;
 import com.banquito.formalizacion.controller.mapper.ContratoCompraVentaMapper;
 import com.banquito.formalizacion.enums.ContratoVentaEstado;
+import com.banquito.formalizacion.exception.ContratoCompraVentaGenerationException;
 import com.banquito.formalizacion.exception.ContratoYaExisteException;
 import com.banquito.formalizacion.exception.NotFoundException;
 import com.banquito.formalizacion.exception.NumeroContratoYaExisteException;
@@ -20,138 +19,93 @@ import com.banquito.formalizacion.model.ContratoCompraVenta;
 import com.banquito.formalizacion.repository.ContratoCompraVentaRepository;
 
 @Service
-@Transactional
 public class ContratoCompraVentaService {
 
-    private static final Logger logger = LoggerFactory.getLogger(ContratoCompraVentaService.class);
+    private final ContratoCompraVentaRepository contratoCompraVentaRepository;
+    private final ContratoCompraVentaMapper contratoCompraVentaMapper;
 
-    private final ContratoCompraVentaRepository repository;
-    private final ContratoCompraVentaMapper mapper;
-
-    public ContratoCompraVentaService(ContratoCompraVentaRepository repository,
-                                     ContratoCompraVentaMapper mapper) {
-        this.repository = repository;
-        this.mapper = mapper;
+    public ContratoCompraVentaService(ContratoCompraVentaRepository contratoCompraVentaRepository,
+                                      ContratoCompraVentaMapper contratoCompraVentaMapper) {
+        this.contratoCompraVentaRepository = contratoCompraVentaRepository;
+        this.contratoCompraVentaMapper = contratoCompraVentaMapper;
     }
 
-    //Obtiene un contrato de compra-venta por su ID.
-    @Transactional(readOnly = true)
-    public ContratoCompraVentaDTO findById(Long id) {
+    // Obtiene un contrato de compra-venta por su ID.
+    @Transactional
+    public ContratoCompraVentaDTO getContratoCompraVentaById(Long id) {
         try {
-            logger.debug("Consultando contrato de compra venta por ID: {}", id);
-            ContratoCompraVenta contrato = repository.findById(id)
-                    .orElseThrow(() -> new NotFoundException(id.toString(), "ContratoCompraVenta"));
-            return mapper.toDTO(contrato);
+            ContratoCompraVenta contrato = contratoCompraVentaRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException(id.toString(), "ContratoCompraVenta"));
+            return contratoCompraVentaMapper.toDTO(contrato);
         } catch (NotFoundException e) {
             throw e;
         } catch (Exception e) {
-            logger.error("Error al consultar contrato de compra venta por ID: {}", id, e);
-            throw new RuntimeException("Error al consultar contrato de compra venta");
+            throw new ContratoCompraVentaGenerationException("Error al obtener el contrato de compra-venta: " + id);
         }
     }
 
     // Crea un nuevo contrato de compra-venta
     @Transactional
-    public ContratoCompraVentaDTO generarContratoVenta(ContratoCompraVentaCreateDTO contratoDto) {
+    public ContratoCompraVentaDTO createContratoCompraVenta(ContratoCompraVentaCreateDTO dto) {
         try {
-            logger.info("Generando contrato de compra venta para solicitud: {}", contratoDto.getIdSolicitud());
-
-            // Verifica si ya existe un contrato con la solicitud o número de contrato
-            if (repository.existsByIdSolicitud(contratoDto.getIdSolicitud())) {
-                throw new ContratoYaExisteException(contratoDto.getIdSolicitud(), "contrato de compra venta");
+            if (contratoCompraVentaRepository.existsByIdSolicitud(dto.getIdSolicitud())) {
+                throw new ContratoYaExisteException(dto.getIdSolicitud(), "ContratoCompraVenta");
             }
-
-            if (repository.existsByNumeroContrato(contratoDto.getNumeroContrato())) {
-                throw new NumeroContratoYaExisteException(contratoDto.getNumeroContrato(), "contrato de compra venta");
+            if (contratoCompraVentaRepository.existsByNumeroContrato(dto.getNumeroContrato())) {
+                throw new NumeroContratoYaExisteException(dto.getNumeroContrato(), "ContratoCompraVenta");
             }
-
-            // Convertir DTO a entidad
-            ContratoCompraVenta contrato = mapper.toEntity(contratoDto);
+            ContratoCompraVenta contrato = contratoCompraVentaMapper.toEntity(dto);
             contrato.setFechaGeneracion(LocalDateTime.now());
             contrato.setEstado(ContratoVentaEstado.PENDIENTE_FIRMA);
             contrato.setVersion(1L);
 
-            // Guardar la entidad en la base de datos
-            ContratoCompraVenta contratoGuardado = repository.save(contrato);
-            logger.info("Contrato de compra venta generado exitosamente con ID: {}", contratoGuardado.getIdContratoVenta());
-
-            // Devolver DTO
-            return mapper.toDTO(contratoGuardado);
+            ContratoCompraVenta saved = contratoCompraVentaRepository.save(contrato);
+            return contratoCompraVentaMapper.toDTO(saved);
         } catch (ContratoYaExisteException | NumeroContratoYaExisteException e) {
             throw e;
         } catch (Exception e) {
-            logger.error("Error al generar contrato de compra venta", e);
-            throw new RuntimeException("Error al generar contrato de compra venta");
+            throw new ContratoCompraVentaGenerationException("Error al crear el contrato de compra-venta");
         }
     }
 
-    // Actualiza un contrato existente
+    // Actualiza un contrato existente por su ID
     @Transactional
-    public ContratoCompraVentaDTO actualizarContrato(Long id, ContratoCompraVentaUpdateDTO dto) {
+    public ContratoCompraVentaDTO updateContratoCompraVenta(Long id, ContratoCompraVentaUpdateDTO dto) {
         try {
-            logger.info("Actualizando contrato de compra venta ID: {}", id);
-
-            // Verificar si el ID del path coincide con el ID en el DTO
             if (!id.equals(dto.getIdContratoVenta())) {
-                throw new ContratoYaExisteException(dto.getIdSolicitud(), "contrato de compra venta");
+                throw new ContratoCompraVentaGenerationException("El ID del path no coincide con el del body");
             }
-
-            // Buscar contrato existente en la base de datos
-            ContratoCompraVenta contratoExistente = repository.findById(id)
-                    .orElseThrow(() -> new NotFoundException(id.toString(), "ContratoCompraVenta"));
-
-            // Mapear los datos del DTO de actualización a la entidad existente
-            contratoExistente.setNumeroContrato(dto.getNumeroContrato());
-            contratoExistente.setFechaFirma(dto.getFechaFirma());
-            contratoExistente.setPrecioFinalVehiculo(dto.getPrecioFinalVehiculo());
-            contratoExistente.setRutaArchivoFirmado(dto.getRutaArchivoFirmado());
-            contratoExistente.setEstado(dto.getEstado());
-
-            // Incrementar la versión del contrato antes de guardar
-            contratoExistente.setVersion(contratoExistente.getVersion() + 1);
-
-            // Guardar los cambios en la base de datos
-            ContratoCompraVenta contratoActualizado = repository.save(contratoExistente);
-            logger.info("Contrato de compra venta actualizado exitosamente");
-
-            // Devolver el DTO de la entidad actualizada
-            return mapper.toDTO(contratoActualizado);
+            ContratoCompraVenta existing = contratoCompraVentaRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException(id.toString(), "ContratoCompraVenta"));
+            contratoCompraVentaMapper.updateEntity(existing, dto);
+            existing.setVersion(existing.getVersion() + 1);
+            ContratoCompraVenta updated = contratoCompraVentaRepository.save(existing);
+            return contratoCompraVentaMapper.toDTO(updated);
         } catch (NotFoundException e) {
             throw e;
         } catch (Exception e) {
-            logger.error("Error al actualizar contrato de compra venta", e);
-            throw new RuntimeException("Error al actualizar contrato de compra venta");
+            throw new ContratoCompraVentaGenerationException("Error al actualizar el contrato de compra-venta: " + id);
         }
     }
 
-    // Método para verificar la existencia del contrato por ID de solicitud
+    // Listar todos los contratos por estado
+    @Transactional
+    public List<ContratoCompraVentaDTO> getContratosByEstado(ContratoVentaEstado estado) {
+        try {
+            var contratos = contratoCompraVentaRepository.findByEstado(estado);
+            return contratoCompraVentaMapper.toDTOList(contratos);
+        } catch (Exception e) {
+            throw new ContratoCompraVentaGenerationException("Error al obtener contratos de compra-venta por estado");
+        }
+    }
+
+    // Verificar existencia de contrato por solicitud
     @Transactional(readOnly = true)
     public boolean existePorSolicitud(Long idSolicitud) {
         try {
-            return repository.existsByIdSolicitud(idSolicitud);
+            return contratoCompraVentaRepository.existsByIdSolicitud(idSolicitud);
         } catch (Exception e) {
-            logger.error("Error al verificar existencia de contrato por solicitud: {}", idSolicitud, e);
-            throw new RuntimeException("Error al verificar existencia de contrato");
+            throw new ContratoCompraVentaGenerationException("Error al verificar existencia de contrato de compra-venta para la solicitud: " + idSolicitud);
         }
     }
-
-    // Método para listar contratos por estado
-    @Transactional(readOnly = true)
-    public List<ContratoCompraVentaDTO> listarContratosPorEstado(ContratoVentaEstado estado) {
-        try {
-            logger.info("Consultando contratos de compra venta con estado: {}", estado);
-
-            // Obtener los contratos filtrados por estado
-            List<ContratoCompraVenta> contratos = repository.findByEstado(estado);
-
-            // Convertir la lista de contratos a DTOs
-            return contratos.stream()
-                    .map(mapper::toDTO)  // Mapear la entidad a DTO
-                    .toList();  // Retornar la lista
-        } catch (Exception e) {
-            logger.error("Error al consultar contratos de compra venta por estado: {}", estado, e);
-            throw new RuntimeException("Error al consultar contratos de compra venta por estado");
-        }
-    }
-
 }

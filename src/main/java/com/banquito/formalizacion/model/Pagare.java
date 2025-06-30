@@ -14,6 +14,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -28,13 +29,13 @@ public class Pagare {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id_pagare", nullable = false)
-    private Integer idPagare;
+    private Long idPagare;
 
     @Column(name = "id_contrato_credito", nullable = false)
-    private Integer idContratoCredito;
+    private Long idContratoCredito;
 
     @Column(name = "numero_cuota", nullable = false)
-    private Integer numeroCuota;
+    private Long numeroCuota;
 
     @Column(name = "monto_cuota", nullable = false, precision = 10, scale = 2)
     private BigDecimal montoCuota;
@@ -46,10 +47,10 @@ public class Pagare {
     @Column(name = "estado", nullable = false)
     private PagareEstado estado;
 
-    @Column(name = "version", nullable = false)
+    @Version
     private Long version;
 
-    public Pagare(Integer idPagare) {
+    public Pagare(Long idPagare) {
         this.idPagare = idPagare;
     }
 
