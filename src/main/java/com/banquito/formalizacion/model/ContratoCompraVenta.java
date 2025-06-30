@@ -14,6 +14,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -28,10 +29,10 @@ public class ContratoCompraVenta {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id_contrato_venta", nullable = false)
-    private Integer idContratoVenta;
+    private Long idContratoVenta;
 
     @Column(name = "id_solicitud", nullable = false, unique = true)
-    private Integer idSolicitud;
+    private Long idSolicitud;
 
     @Column(name = "numero_contrato", nullable = false, unique = true, length = 50)
     private String numeroContrato;
@@ -52,10 +53,10 @@ public class ContratoCompraVenta {
     @Column(name = "estado", nullable = false)
     private ContratoVentaEstado estado;
 
-    @Column(name = "version", nullable = false)
+    @Version
     private Long version;
 
-    public ContratoCompraVenta(Integer idContratoVenta) {
+    public ContratoCompraVenta(Long  idContratoVenta) {
         this.idContratoVenta = idContratoVenta;
     }
 
