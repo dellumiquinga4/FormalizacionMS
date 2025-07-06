@@ -87,10 +87,10 @@ public class ContratoCreditoService {
         ContratoCredito existing = contratoCreditoRepository.findById(id)
             .orElseThrow(() -> new ContratoCreditoGenerationException("Contrato no encontrado: " + id));
 
-        if (ContratoCreditoEstado.CANCELADO.equals(existing.getEstado())) {
+        if (ContratoCreditoEstado.ACTIVO.equals(existing.getEstado())) {
             throw new ContratoCreditoGenerationException("El contrato ya está cancelado: " + id);
         }
-        existing.setEstado(ContratoCreditoEstado.CANCELADO);
+        existing.setEstado(ContratoCreditoEstado.ACTIVO);
         ContratoCredito saved = contratoCreditoRepository.save(existing);
         return contratoCreditoMapper.toDto(saved);
     }
