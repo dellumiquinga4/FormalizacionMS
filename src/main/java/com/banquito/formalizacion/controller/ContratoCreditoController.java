@@ -204,17 +204,11 @@ public class ContratoCreditoController {
     @PostMapping("/pagares/generar")
     @Operation(summary = "Generar cronograma completo de pagarés", description = "Genera N pagarés automáticos para un contrato, uno por cada mes")
     public ResponseEntity<List<PagareDTO>> generarPagares(
-            @Parameter(description = "ID del contrato de crédito") @RequestParam Long idContratoCredito,
-            @Parameter(description = "Monto solicitado") @RequestParam BigDecimal montoSolicitado,
-            @Parameter(description = "Tasa anual (%)") @RequestParam BigDecimal tasaAnual,
-            @Parameter(description = "Plazo en meses") @RequestParam int plazoMeses,
-            @Parameter(description = "Fecha inicial") @RequestParam LocalDate fechaInicio) {
-        log.info("Generando {} pagarés para contrato {} (monto={}, tasa={}, inicio={})",
-                plazoMeses, idContratoCredito, montoSolicitado, tasaAnual, fechaInicio);
-        List<PagareDTO> pagares = service.generarPagaresDesdeParams(
-                idContratoCredito, montoSolicitado, tasaAnual, plazoMeses, fechaInicio);
+            @Parameter(description = "ID del contrato de crédito") @RequestParam Long idContratoCredito) {
+        List<PagareDTO> pagares = service.generarPagaresDesdeContrato(idContratoCredito);
         return ResponseEntity.status(HttpStatus.CREATED).body(pagares);
     }
+
 
     @GetMapping("/pagares/contrato/{idContratoCredito}/existen")
     @Operation(summary = "Verificar si existen pagarés para un contrato")

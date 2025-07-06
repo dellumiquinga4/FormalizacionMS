@@ -25,7 +25,6 @@ public interface ContratoCreditoMapper {
     @Mapping(target = "fechaGeneracion", expression = "java(java.time.LocalDateTime.now())") // Establece la fecha actual por defecto
     @Mapping(target = "fechaFirma", ignore = true) 
     @Mapping(target = "version", ignore = true) // No mapeamos la versión, la dejamos como está en la base de datos
-    @Mapping(target = "idSolicitud", expression = "java(12345L)") // El id de solicitud se coloca de forma fija por ahora
     ContratoCredito toEntity(ContratoCreditoCreateDTO dto);
 
     // Mapea la entidad a DTO para actualización

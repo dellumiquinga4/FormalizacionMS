@@ -23,7 +23,6 @@ public interface ContratoCompraVentaMapper {
     // Mapea de modelo a DTO de creación
     @Mapping(target = "idContratoVenta", ignore = true) // Ignora la ID ya que se genera automáticamente
     @Mapping(target = "fechaGeneracion", expression = "java(java.time.LocalDateTime.now())") // Establece fecha actual por defecto
-    @Mapping(target = "idSolicitud", expression = "java(12345L)")
     ContratoCompraVenta toEntity(ContratoCompraVentaCreateDTO dto);
 
     // Mapea de DTO de actualización a modelo, modificando solo los campos necesarios

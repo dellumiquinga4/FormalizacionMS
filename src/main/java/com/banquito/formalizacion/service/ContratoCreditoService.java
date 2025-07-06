@@ -11,6 +11,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.banquito.formalizacion.client.SolicitudCreditoClient;
 import com.banquito.formalizacion.controller.dto.*;
 import com.banquito.formalizacion.controller.mapper.ContratoCreditoMapper;
 import com.banquito.formalizacion.controller.mapper.PagareMapper;
@@ -31,17 +32,20 @@ public class ContratoCreditoService {
     private final PagareRepository pagareRepository;
     private final ContratoCreditoMapper contratoCreditoMapper;
     private final PagareMapper pagareMapper;
+    private final SolicitudCreditoClient solicitudCreditoClient;
 
     public ContratoCreditoService(
         ContratoCreditoRepository contratoCreditoRepository,
         PagareRepository pagareRepository,
         ContratoCreditoMapper contratoCreditoMapper,
-        PagareMapper pagareMapper
+        PagareMapper pagareMapper,
+        SolicitudCreditoClient solicitudCreditoClient
     ) {
         this.contratoCreditoRepository = contratoCreditoRepository;
         this.pagareRepository = pagareRepository;
         this.contratoCreditoMapper = contratoCreditoMapper;
         this.pagareMapper = pagareMapper;
+        this.solicitudCreditoClient = solicitudCreditoClient;
     }
 
     // -------- CONTRATO CREDITO --------
@@ -55,16 +59,27 @@ public class ContratoCreditoService {
 
     @Transactional
     public ContratoCreditoDTO createContratoCredito(ContratoCreditoCreateDTO dto) {
-        if (contratoCreditoRepository.existsByIdSolicitud(dto.getIdSolicitud())) {
-            throw new ContratoCreditoGenerationException("Ya existe un contrato para solicitud " + dto.getIdSolicitud());
+        // 1. Consumir el MS de originación para obtener la solicitud real
+        SolicitudResumenDTO solicitud = solicitudCreditoClient.obtenerSolicitudPorId(dto.getIdSolicitud());
+
+        // 3. Validaciones de unicidad
+        if (contratoCreditoRepository.existsByIdSolicitud(solicitud.getIdSolicitud())) {
+            throw new ContratoCreditoGenerationException("Ya existe un contrato para solicitud " + solicitud.getIdSolicitud());
         }
         if (contratoCreditoRepository.existsByNumeroContrato(dto.getNumeroContrato())) {
             throw new NumeroContratoYaExisteException(dto.getNumeroContrato(), "ContratoCredito");
         }
+
+        // 4. Construir la entidad, pero SOBRESCRIBE los campos con los valores del MS originación
         ContratoCredito contrato = contratoCreditoMapper.toEntity(dto);
+        contrato.setIdSolicitud(solicitud.getIdSolicitud());
+        contrato.setMontoAprobado(solicitud.getMontoAprobado());
+        contrato.setPlazoFinalMeses(solicitud.getPlazoFinalMeses() != null ? solicitud.getPlazoFinalMeses().longValue() : null);
+        contrato.setTasaEfectivaAnual(solicitud.getTasaEfectivaAnual());
         contrato.setEstado(ContratoCreditoEstado.PENDIENTE_FIRMA);
         contrato.setVersion(1L);
 
+        // 5. Guardar y retornar el DTO
         ContratoCredito saved = contratoCreditoRepository.save(contrato);
         return contratoCreditoMapper.toDto(saved);
     }
@@ -204,6 +219,20 @@ public class ContratoCreditoService {
         }
         return pagareMapper.toDtoList(pagares);
     }
+
+    @Transactional
+    public List<PagareDTO> generarPagaresDesdeContrato(Long idContratoCredito) {
+        ContratoCredito contrato = contratoCreditoRepository.findById(idContratoCredito)
+            .orElseThrow(() -> new PagareGenerationException("Contrato de crédito no encontrado: " + idContratoCredito));
+
+        BigDecimal montoSolicitado = contrato.getMontoAprobado();
+        BigDecimal tasaAnual = contrato.getTasaEfectivaAnual();
+        int plazoMeses = contrato.getPlazoFinalMeses().intValue();
+        LocalDate fechaInicio = contrato.getFechaGeneracion().toLocalDate(); // Ajusta si tienes un campo específico para fecha de inicio
+
+        return this.generarPagaresDesdeParams(idContratoCredito, montoSolicitado, tasaAnual, plazoMeses, fechaInicio);
+    }
+
 
     private BigDecimal calcularCuotaMensual(BigDecimal monto, BigDecimal tasaAnual, int plazoMeses) {
         if (tasaAnual == null || tasaAnual.compareTo(BigDecimal.ZERO) <= 0) {

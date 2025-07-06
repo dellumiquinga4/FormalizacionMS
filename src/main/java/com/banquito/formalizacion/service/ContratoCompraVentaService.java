@@ -6,9 +6,11 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.banquito.formalizacion.client.SolicitudCreditoClient;
 import com.banquito.formalizacion.controller.dto.ContratoCompraVentaDTO;
 import com.banquito.formalizacion.controller.dto.ContratoCompraVentaCreateDTO;
 import com.banquito.formalizacion.controller.dto.ContratoCompraVentaUpdateDTO;
+import com.banquito.formalizacion.controller.dto.SolicitudResumenDTO;
 import com.banquito.formalizacion.controller.mapper.ContratoCompraVentaMapper;
 import com.banquito.formalizacion.enums.ContratoVentaEstado;
 import com.banquito.formalizacion.exception.ContratoCompraVentaGenerationException;
@@ -23,11 +25,14 @@ public class ContratoCompraVentaService {
 
     private final ContratoCompraVentaRepository contratoCompraVentaRepository;
     private final ContratoCompraVentaMapper contratoCompraVentaMapper;
+    private final SolicitudCreditoClient solicitudCreditoClient;
 
     public ContratoCompraVentaService(ContratoCompraVentaRepository contratoCompraVentaRepository,
-                                      ContratoCompraVentaMapper contratoCompraVentaMapper) {
+                                      ContratoCompraVentaMapper contratoCompraVentaMapper,
+                                      SolicitudCreditoClient solicitudCreditoClient) {
         this.contratoCompraVentaRepository = contratoCompraVentaRepository;
         this.contratoCompraVentaMapper = contratoCompraVentaMapper;
+        this.solicitudCreditoClient = solicitudCreditoClient;
     }
 
     // Obtiene un contrato de compra-venta por su ID.
@@ -48,23 +53,34 @@ public class ContratoCompraVentaService {
     @Transactional
     public ContratoCompraVentaDTO createContratoCompraVenta(ContratoCompraVentaCreateDTO dto) {
         try {
-            if (contratoCompraVentaRepository.existsByIdSolicitud(dto.getIdSolicitud())) {
-                throw new ContratoYaExisteException(dto.getIdSolicitud(), "ContratoCompraVenta");
+            // 1. Trae la solicitud del microservicio de originación (usa el idSolicitud recibido en el DTO)
+            SolicitudResumenDTO resumen = solicitudCreditoClient.obtenerSolicitudPorId(dto.getIdSolicitud());
+
+            // 3. Validaciones de unicidad (NO cambian)
+            if (contratoCompraVentaRepository.existsByIdSolicitud(resumen.getIdSolicitud())) {
+                throw new ContratoYaExisteException(resumen.getIdSolicitud(), "ContratoCompraVenta");
             }
             if (contratoCompraVentaRepository.existsByNumeroContrato(dto.getNumeroContrato())) {
                 throw new NumeroContratoYaExisteException(dto.getNumeroContrato(), "ContratoCompraVenta");
             }
+
+            // 4. Construye la entidad desde el DTO
             ContratoCompraVenta contrato = contratoCompraVentaMapper.toEntity(dto);
+
+            // 5. SOBRESCRIBE los valores sensibles con lo que trae originación
+            contrato.setIdSolicitud(resumen.getIdSolicitud());
+            contrato.setPrecioFinalVehiculo(resumen.getPrecioFinalVehiculo());// Siempre lo del MS originación
             contrato.setFechaGeneracion(LocalDateTime.now());
             contrato.setEstado(ContratoVentaEstado.PENDIENTE_FIRMA);
             contrato.setVersion(1L);
 
+            // 6. Guarda y retorna el DTO
             ContratoCompraVenta saved = contratoCompraVentaRepository.save(contrato);
             return contratoCompraVentaMapper.toDTO(saved);
         } catch (ContratoYaExisteException | NumeroContratoYaExisteException e) {
             throw e;
         } catch (Exception e) {
-            throw new ContratoCompraVentaGenerationException("Error al crear el contrato de compra-venta");
+            throw new ContratoCompraVentaGenerationException("Error al crear el contrato de compra-venta", e);
         }
     }
 
